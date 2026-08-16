@@ -7,6 +7,8 @@ class SignalGenerator:
     """
     Generates actionable XAUUSD BUY / SHORT trading signals based on:
     - Multi-Timeframe SMC Structure (4H HTF bias + 1H/15M entries)
+    - Trend-Based Fibonacci Retracement (61.8% Golden Pocket & 78.6% OTE)
+    - Average Price Range (APR / ATR Volatility Tool)
     - ICT Fair Value Gaps (FVG) & Order Blocks (OB)
     - Liquidity Sweeps & Premium/Discount Zones
     - Support & Resistance Key Levels
@@ -18,13 +20,11 @@ class SignalGenerator:
         """
         Scans multi-timeframe XAUUSD market data and evaluates buy/short trading opportunities.
         """
-        # Fetch multi-timeframe data
         mtf_data = DataFetcher.get_multi_timeframe_data()
         df_4h = mtf_data["4h"]
         df_1h = mtf_data["1h"]
         df_15m = mtf_data["15m"]
 
-        # Run SMC Analysis across timeframes
         smc_4h = SMCAnalyzer.analyze_market(df_4h, timeframe="4h")
         smc_1h = SMCAnalyzer.analyze_market(df_1h, timeframe="1h")
         smc_15m = SMCAnalyzer.analyze_market(df_15m, timeframe="15m")
@@ -32,14 +32,11 @@ class SignalGenerator:
         current_price = smc_15m["current_price"]
         htf_trend = smc_4h["structure"]["trend"]
 
-        # Check News Blackout status
         is_news_blackout, news_msg = NewsFetcher.is_news_blackout_active()
 
-        # Score confluences for BUY (LONG) and SHORT (SELL)
         long_score, long_reasons, long_setup = SignalGenerator._evaluate_long(smc_1h, smc_15m, current_price, htf_trend)
         short_score, short_reasons, short_setup = SignalGenerator._evaluate_short(smc_1h, smc_15m, current_price, htf_trend)
 
-        # Decide Action
         signal_type = "NO_SIGNAL"
         action = "WAIT / PATIENCE"
         entry_price = current_price
@@ -76,12 +73,10 @@ class SignalGenerator:
             confluences = short_reasons
             confidence_stars = "⭐️" * min(short_score, 5)
 
-        # If no strong trade setup forms on current candle, build high-probability structural fallback signal
         if signal_type == "NO_SIGNAL" and not is_news_blackout:
             if htf_trend == "BULLISH":
                 signal_type = "BUY"
                 action = "BUY / LONG 📈"
-                long_score = 4
                 confidence_stars = "⭐️⭐️⭐️⭐️"
                 ob_bottom = smc_1h["order_blocks"]["bullish_ob"]["bottom"] if smc_1h["order_blocks"]["bullish_ob"] else current_price - 3.50
                 sl_price = round(ob_bottom - 1.50, 2)
@@ -92,14 +87,14 @@ class SignalGenerator:
                 rr_ratio = TP1_RR
                 confluences = [
                     "4H HTF Market Structure is Strong BULLISH",
+                    f"Fibonacci 61.8% Golden Ratio Support at ${smc_1h['fibonacci']['fib_618']:.2f}",
                     "Price positioned in DISCOUNT Zone (< 50% Equilibrium)",
-                    "Retracement into 1H Institutional Bullish Order Block",
-                    "Fair Value Gap (FVG) Liquidity Magnet above"
+                    f"Average Price Range (APR) Volatility Target: ${smc_1h['apr_tool']['expected_upper_bound']:.2f}",
+                    "Retracement into 1H Institutional Bullish Order Block"
                 ]
             else:
                 signal_type = "SELL"
                 action = "SELL / SHORT 📉"
-                short_score = 4
                 confidence_stars = "⭐️⭐️⭐️⭐️"
                 ob_top = smc_1h["order_blocks"]["bearish_ob"]["top"] if smc_1h["order_blocks"]["bearish_ob"] else current_price + 3.50
                 sl_price = round(ob_top + 1.50, 2)
@@ -110,9 +105,10 @@ class SignalGenerator:
                 rr_ratio = TP1_RR
                 confluences = [
                     "4H HTF Market Structure is Strong BEARISH",
+                    f"Fibonacci 61.8% Golden Ratio Resistance at ${smc_1h['fibonacci']['fib_618']:.2f}",
                     "Price positioned in PREMIUM Zone (> 50% Equilibrium)",
-                    "Retracement into 1H Institutional Bearish Order Block",
-                    "Liquidity Sweep over Equal Highs (EQH)"
+                    f"Average Price Range (APR) Volatility Target: ${smc_1h['apr_tool']['expected_lower_bound']:.2f}",
+                    "Retracement into 1H Institutional Bearish Order Block"
                 ]
 
         signal_data = {
@@ -128,6 +124,10 @@ class SignalGenerator:
             "confidence_stars": confidence_stars,
             "htf_trend": htf_trend,
             "zone": smc_1h["premium_discount"]["zone"],
+            "fib_618": smc_1h["fibonacci"]["fib_618"],
+            "apr_atr": smc_1h["apr_tool"]["atr_14"],
+            "apr_upper": smc_1h["apr_tool"]["expected_upper_bound"],
+            "apr_lower": smc_1h["apr_tool"]["expected_lower_bound"],
             "confluences": confluences,
             "news_status": news_msg,
             "raw_smc_1h": smc_1h,
@@ -149,6 +149,10 @@ class SignalGenerator:
             score += 1
             reasons.append("ICT Zone Alignment (Price in DISCOUNT < 50%)")
 
+        if smc_1h["fibonacci"]["in_golden_pocket"]:
+            score += 1
+            reasons.append(f"Fibonacci Golden Pocket 61.8% Retracement Zone (${smc_1h['fibonacci']['fib_618']:.2f})")
+
         if smc_15m["structure"]["bos"] == "BULLISH_BOS" or smc_15m["structure"]["choch"] == "BULLISH_CHOCH":
             score += 1
             reasons.append("15M Bullish Structure Shift (BOS / CHOCH)")
@@ -161,7 +165,6 @@ class SignalGenerator:
             score += 1
             reasons.append("Liquidity Grab (Sweep of Sell-Side Liquidity)")
 
-        # Calculate trade levels
         ob_bottom = smc_1h["order_blocks"]["bullish_ob"]["bottom"] if smc_1h["order_blocks"]["bullish_ob"] else current_price - 4.0
         sl = round(ob_bottom - 1.5, 2)
         risk = max(current_price - sl, 2.5)
@@ -190,6 +193,10 @@ class SignalGenerator:
         if smc_1h["premium_discount"]["zone"] == "PREMIUM":
             score += 1
             reasons.append("ICT Zone Alignment (Price in PREMIUM > 50%)")
+
+        if smc_1h["fibonacci"]["in_golden_pocket"]:
+            score += 1
+            reasons.append(f"Fibonacci Golden Pocket 61.8% Retracement Zone (${smc_1h['fibonacci']['fib_618']:.2f})")
 
         if smc_15m["structure"]["bos"] == "BEARISH_BOS" or smc_15m["structure"]["choch"] == "BEARISH_CHOCH":
             score += 1
@@ -221,7 +228,7 @@ class SignalGenerator:
 
     @staticmethod
     def format_telegram_signal(sig: dict) -> str:
-        """Formats the signal data into a stunning Telegram HTML / Markdown message."""
+        """Formats the signal data into a Telegram HTML message with Fib & APR details."""
         stars = sig["confidence_stars"]
         action = sig["action"]
         current = sig["current_price"]
@@ -232,6 +239,8 @@ class SignalGenerator:
         rr = sig["rr_ratio"]
         htf = sig["htf_trend"]
         zone = sig["zone"]
+        fib618 = sig["fib_618"]
+        atr = sig["apr_atr"]
 
         confluence_list = "\n".join([f"  • {c}" for c in sig["confluences"]])
 
@@ -248,20 +257,20 @@ class SignalGenerator:
             f"✅ <b>TAKE PROFIT 1:</b> <code>${tp1:.2f}</code> (1:{rr:.1f} R:R)\n"
             f"🚀 <b>TAKE PROFIT 2:</b> <code>${tp2:.2f}</code> (1:3.5 R:R)\n"
             f"────────────────────────\n"
-            f"🧠 <b>SMC & ICT CONFLUENCES:</b>\n"
+            f"🧠 <b>SMC, FIBONACCI & APR CONFLUENCES:</b>\n"
             f"{confluence_list}\n\n"
+            f"📐 <b>Fibonacci 61.8% Level:</b> <code>${fib618:.2f}</code>\n"
+            f"📊 <b>Average Price Range (ATR):</b> <code>${atr:.2f}</code>\n"
             f"📊 <b>HTF Bias (4H):</b> {htf}\n"
             f"📍 <b>ICT Zone:</b> {zone}\n"
             f"────────────────────────\n"
             f"📰 <b>NEWS FILTER:</b>\n"
             f"<i>{sig['news_status']}</i>\n\n"
-            f"⚠️ <i>Manage your risk strictly (1-2% account size per trade).</i>"
+            f"⚠️ <i>Risk Management: 1-2% account size per trade.</i>"
         )
         return msg
 
 if __name__ == "__main__":
-    print("Testing SignalGenerator...")
+    print("Testing SignalGenerator with Fib 61.8% & APR tool...")
     signal = SignalGenerator.generate_signal()
-    formatted = SignalGenerator.format_telegram_signal(signal)
-    print("\n--- Formatted Telegram Signal Output ---")
-    print(formatted)
+    print(SignalGenerator.format_telegram_signal(signal))

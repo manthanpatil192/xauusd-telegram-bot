@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use("Agg")  # Non-interactive backend for generating image buffers/files
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
@@ -11,27 +11,21 @@ from smc_analyzer import SMCAnalyzer
 class ChartGenerator:
     """
     Generates annotated dark-mode candlestick chart images for XAUUSD
-    showing Entry, Stop Loss, Take Profit levels, Order Blocks, and Fair Value Gaps.
+    showing Entry, SL, TP levels, Order Blocks, FVGs, Fibonacci 61.8% Level, and Average Price Range (APR).
     """
 
     @staticmethod
     def generate_signal_chart(df: pd.DataFrame, signal_data: dict, output_path: str = "chart.png") -> str:
-        """
-        Plots dark-mode XAUUSD candles with highlighted SMC levels (Entry, SL, TP1, TP2, OB, FVG).
-        Returns the absolute path to the saved PNG image.
-        """
         if df.empty:
             df = DataFetcher.fetch_ohlcv(interval="1h")
 
-        df = df.tail(40).copy() # Focus on recent 40 candles
+        df = df.tail(40).copy()
 
-        # Set up dark mode style
         plt.style.use("dark_background")
         fig, ax = plt.subplots(figsize=(12, 7), dpi=150)
         fig.patch.set_facecolor("#12141D")
         ax.set_facecolor("#181B26")
 
-        # Plot Candlesticks
         indexes = np.arange(len(df))
         opens = df["Open"].values
         highs = df["High"].values
@@ -39,17 +33,14 @@ class ChartGenerator:
         closes = df["Close"].values
 
         for i in range(len(df)):
-            color = "#00E676" if closes[i] >= opens[i] else "#FF5252" # Bright green / bright red
-            # High-Low wick
+            color = "#00E676" if closes[i] >= opens[i] else "#FF5252"
             ax.plot([indexes[i], indexes[i]], [lows[i], highs[i]], color=color, linewidth=1.2)
-            # Candle body
             body_bottom = min(opens[i], closes[i])
             body_top = max(opens[i], closes[i])
             body_height = max(body_top - body_bottom, 0.10)
             rect = plt.Rectangle((indexes[i] - 0.35, body_bottom), 0.7, body_height, facecolor=color, edgecolor=color, alpha=0.9)
             ax.add_patch(rect)
 
-        # Draw Signal Levels
         entry = signal_data["entry"]
         sl = signal_data["sl"]
         tp1 = signal_data["tp1"]
@@ -60,7 +51,19 @@ class ChartGenerator:
         ax.axhline(y=tp1, color="#00E676", linestyle=":", linewidth=1.8, label=f"TAKE PROFIT 1: ${tp1:.2f}")
         ax.axhline(y=tp2, color="#76FF03", linestyle="-", linewidth=2.0, label=f"TAKE PROFIT 2: ${tp2:.2f}")
 
-        # Highlight Order Blocks & FVGs if available
+        # Plot Trend-Based Fibonacci 61.8% Golden Ratio Line
+        fib618 = signal_data.get("fib_618")
+        if fib618:
+            ax.axhline(y=fib618, color="#FFD700", linestyle="-", linewidth=1.5, alpha=0.85, label=f"Fib 61.8% Golden Ratio: ${fib618:.2f}")
+
+        # Plot Average Price Range (APR) Bounds
+        apr_upper = signal_data.get("apr_upper")
+        apr_lower = signal_data.get("apr_lower")
+        if apr_upper and apr_lower:
+            ax.axhline(y=apr_upper, color="#AB47BC", linestyle=":", linewidth=1.2, alpha=0.7, label=f"APR Upper Range: ${apr_upper:.2f}")
+            ax.axhline(y=apr_lower, color="#AB47BC", linestyle=":", linewidth=1.2, alpha=0.7, label=f"APR Lower Range: ${apr_lower:.2f}")
+
+        # Highlight Order Blocks
         smc_1h = signal_data.get("raw_smc_1h", {})
         if "order_blocks" in smc_1h:
             bull_ob = smc_1h["order_blocks"].get("bullish_ob")
@@ -71,20 +74,18 @@ class ChartGenerator:
             if bear_ob:
                 ax.axhspan(bear_ob["bottom"], bear_ob["top"], color="#FF1744", alpha=0.15, label="Bearish Order Block")
 
-        # Titles and Labels
         action = signal_data["action"]
         stars = signal_data["confidence_stars"]
-        ax.set_title(f"XAUUSD (Gold) Smart Money Concepts Setup | {action} {stars}", fontsize=14, fontweight="bold", pad=12, color="#FFFFFF")
+        ax.set_title(f"XAUUSD (Gold) SMC & Fib 61.8% Setup | {action} {stars}", fontsize=14, fontweight="bold", pad=12, color="#FFFFFF")
         ax.set_ylabel("Price ($ USD)", fontsize=11, color="#B0BEC5")
 
-        # X-axis candle timestamps
         time_labels = [t.strftime("%H:%M") if hasattr(t, "strftime") else str(t) for t in df.index]
         step = max(len(df) // 6, 1)
         ax.set_xticks(indexes[::step])
         ax.set_xticklabels(time_labels[::step], color="#B0BEC5", rotation=25)
 
         ax.grid(True, color="#263238", linestyle=":", alpha=0.6)
-        ax.legend(loc="upper left", facecolor="#1E2330", edgecolor="#37474F", fontsize=10, labelcolor="#FFFFFF")
+        ax.legend(loc="upper left", facecolor="#1E2330", edgecolor="#37474F", fontsize=9, labelcolor="#FFFFFF")
 
         plt.tight_layout()
 
@@ -96,8 +97,8 @@ class ChartGenerator:
 
 if __name__ == "__main__":
     from signal_generator import SignalGenerator
-    print("Testing ChartGenerator...")
+    print("Testing ChartGenerator with Fib 61.8% & APR visual annotations...")
     signal = SignalGenerator.generate_signal()
     df_1h = DataFetcher.fetch_ohlcv(interval="1h")
-    file_path = ChartGenerator.generate_signal_chart(df_1h, signal, "test_chart.png")
+    file_path = ChartGenerator.generate_signal_chart(df_1h, signal, "test_fib_chart.png")
     print(f"Saved chart to: {file_path}")

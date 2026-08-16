@@ -32,24 +32,12 @@ try:
     )
     HAS_TELEGRAM_LIB = True
 except ImportError:
-    try:
-        from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-        from telegram.ext import (
-            Application,
-            CommandHandler,
-            MessageHandler,
-            CallbackQueryHandler,
-            ContextTypes,
-            filters,
-        )
-        ParseMode = None
-        HAS_TELEGRAM_LIB = True
-    except ImportError:
-        HAS_TELEGRAM_LIB = False
+    HAS_TELEGRAM_LIB = False
 
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton("⚡ Get Live Signal"), KeyboardButton("🔍 Market Analysis")],
+        [KeyboardButton("📐 Fib 61.8% Golden Zone"), KeyboardButton("📊 APR Tool Volatility")],
         [KeyboardButton("🌱 Eco Mode & ESG"), KeyboardButton("📰 Economic News Radar")],
         [KeyboardButton("📈 View SMC Chart"), KeyboardButton("ℹ️ Strategy & Help")]
     ]
@@ -60,6 +48,10 @@ def get_inline_signal_buttons():
         [
             InlineKeyboardButton("🎯 Refresh Signal", callback_data="btn_signal"),
             InlineKeyboardButton("📈 View SMC Chart", callback_data="btn_chart")
+        ],
+        [
+            InlineKeyboardButton("📐 Fib 61.8% Golden Zone", callback_data="btn_fib"),
+            InlineKeyboardButton("📊 APR Volatility", callback_data="btn_apr")
         ],
         [
             InlineKeyboardButton("🔍 Deep Analysis", callback_data="btn_analysis"),
@@ -94,6 +86,50 @@ async def signal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = SignalGenerator.format_telegram_signal(signal)
     
     await target.reply_text(message, parse_mode="HTML", reply_markup=get_inline_signal_buttons())
+
+async def fib_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target = update.message if update.message else update.callback_query.message
+    await target.reply_text("📐 Calculating Trend-Based Fibonacci Retracement Zones for XAUUSD...")
+
+    mtf = DataFetcher.get_multi_timeframe_data()
+    smc_1h = SMCAnalyzer.analyze_market(mtf["1h"], "1h")
+    fib = smc_1h["fibonacci"]
+    cp = smc_1h["current_price"]
+
+    msg = (
+        f"📐 <b>TREND-BASED FIBONACCI RETRACEMENT ZONES</b> 📐\n"
+        f"═════════════════════════\n"
+        f"💰 <b>Current XAUUSD Price:</b> <code>${cp:.2f}</code>\n\n"
+        f"🌟 <b>Golden Pocket (61.8%):</b> <code>${fib['fib_618']:.2f}</code> (Best Entry Level 🔥)\n"
+        f"🎯 <b>OTE Zone (78.6%):</b> <code>${fib['fib_786']:.2f}</code>\n"
+        f"📍 <b>Equilibrium (50.0%):</b> <code>${fib['fib_500']:.2f}</code>\n"
+        f"🛡️ <b>Discount Support (38.2%):</b> <code>${fib['fib_382']:.2f}</code>\n"
+        f"═════════════════════════\n"
+        f"💡 <i>The 61.8% Golden Ratio level acts as high-probability institutional reaction zone.</i>"
+    )
+    await target.reply_text(msg, parse_mode="HTML", reply_markup=get_inline_signal_buttons())
+
+async def apr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target = update.message if update.message else update.callback_query.message
+    await target.reply_text("📊 Calculating Average Price Range (APR / ATR 14) Volatility Bounds...")
+
+    mtf = DataFetcher.get_multi_timeframe_data()
+    smc_1h = SMCAnalyzer.analyze_market(mtf["1h"], "1h")
+    apr = smc_1h["apr_tool"]
+    cp = smc_1h["current_price"]
+
+    msg = (
+        f"📊 <b>AVERAGE PRICE RANGE (APR TOOL) REPORT</b> 📊\n"
+        f"═════════════════════════\n"
+        f"💰 <b>Current XAUUSD Price:</b> <code>${cp:.2f}</code>\n"
+        f"⚡ <b>14-Period Average Range (ATR):</b> <code>${apr['atr_14']:.2f}</code>\n"
+        f"═════════════════════════\n"
+        f"🚀 <b>Upper Expected Volatility Bound:</b> <code>${apr['upper_bound_1d']:.2f}</code>\n"
+        f"📉 <b>Lower Expected Volatility Bound:</b> <code>${apr['lower_bound_1d']:.2f}</code>\n"
+        f"═════════════════════════\n"
+        f"💡 <i>Use APR bounds to avoid placing stop loss within normal daily noise range.</i>"
+    )
+    await target.reply_text(msg, parse_mode="HTML", reply_markup=get_inline_signal_buttons())
 
 async def analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message if update.message else update.callback_query.message
@@ -209,12 +245,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "ℹ️ <b>BOT USER GUIDE & RULES</b> ℹ️\n\n"
         "• /signal - Generate live XAUUSD signal (SMC + Fib 61.8% + RSI + APR)\n"
         "• /analysis - Deep multi-timeframe SMC & Fibonacci breakdown\n"
+        "• /fib - 📐 Trend-Based Fibonacci 61.8% Golden Ratio level\n"
+        "• /apr - 📊 Average Price Range (ATR 14) volatility bounds\n"
         "• /eco - 🌱 Eco-Mode, Green-Compute stats & ESG Gold data\n"
         "• /news - USD Economic Calendar & High-Impact event alerts\n"
-        "• /chart - Visual chart screenshot with Fib 61.8% & OB zones\n\n"
-        "<b>Trading Rule Recommendations:</b>\n"
-        "1. Risk 1-2% of account per setup.\n"
-        "2. Move SL to Entry (Break-Even) once TP1 is achieved."
+        "• /chart - Visual chart screenshot with Fib 61.8% & OB zones"
     )
     await update.message.reply_text(help_text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
@@ -227,6 +262,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await signal_command(update, context)
     elif data == "btn_analysis":
         await analysis_command(update, context)
+    elif data == "btn_fib":
+        await fib_command(update, context)
+    elif data == "btn_apr":
+        await apr_command(update, context)
     elif data == "btn_chart":
         await chart_command(update, context)
     elif data == "btn_news":
@@ -240,6 +279,10 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await signal_command(update, context)
     elif "Analysis" in text:
         await analysis_command(update, context)
+    elif "Fib" in text or "61.8%" in text:
+        await fib_command(update, context)
+    elif "APR" in text or "Volatility" in text:
+        await apr_command(update, context)
     elif "Eco Mode" in text or "ESG" in text:
         await eco_command(update, context)
     elif "News" in text:
@@ -250,7 +293,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await help_command(update, context)
 
 async def run_bot_instance(token: str):
-    """Runs an independent Telegram bot instance using the specified bot token."""
     if not HAS_TELEGRAM_LIB:
         logger.error("python-telegram-bot library is missing!")
         return
@@ -261,6 +303,8 @@ async def run_bot_instance(token: str):
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("signal", signal_command))
     app.add_handler(CommandHandler("analysis", analysis_command))
+    app.add_handler(CommandHandler("fib", fib_command))
+    app.add_handler(CommandHandler("apr", apr_command))
     app.add_handler(CommandHandler("eco", eco_command))
     app.add_handler(CommandHandler("toggle_eco", toggle_eco_command))
     app.add_handler(CommandHandler("news", news_command))
@@ -274,7 +318,6 @@ async def run_bot_instance(token: str):
     await app.updater.start_polling()
     logger.info(f"✅ Bot Instance (...{token[-8:]}) is now LIVE & listening!")
 
-    # Keep running
     while True:
         await asyncio.sleep(3600)
 

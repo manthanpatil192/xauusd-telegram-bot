@@ -7,30 +7,36 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import TELEGRAM_BOT_TOKENS, PRIMARY_BOT_TOKEN, SECONDARY_BOT_TOKEN
+from config import PRIMARY_BOT_TOKEN, SECONDARY_BOT_TOKEN
 from bot import run_bot_instance
+from trademaster_bot import run_trademaster_bot
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
-logger = logging.getLogger("XAUUSD_Multi_Bot_Main")
+logger = logging.getLogger("Multi_Bot_Runner")
 
 async def run_all_bots():
-    logger.info("=" * 60)
-    logger.info("Starting Multi-Bot High-Precision XAUUSD Signal Service")
-    logger.info(f"Active Bot Tokens Configured: {len(TELEGRAM_BOT_TOKENS)}")
-    logger.info("=" * 60)
+    logger.info("=" * 65)
+    logger.info("Starting Multi-Bot Platform:")
+    logger.info("  1. Gold Bot (@Golddddddddddddddbot) ➔ XAUUSD SMC & ICT Engine")
+    logger.info("  2. TradeMaster (@Raidennnnnxbot) ➔ Indian Stock Market (NIFTY/NSE)")
+    logger.info("=" * 65)
 
-    if not TELEGRAM_BOT_TOKENS:
-        logger.error("No Telegram Bot tokens configured in .env!")
-        return
-
-    # Create concurrent background tasks for each bot token
     tasks = []
-    for idx, token in enumerate(TELEGRAM_BOT_TOKENS, 1):
-        logger.info(f"🚀 Launching Bot Instance #{idx}...")
-        tasks.append(asyncio.create_task(run_bot_instance(token)))
+    
+    if PRIMARY_BOT_TOKEN:
+        logger.info("🚀 Launching XAUUSD Gold Bot (@Golddddddddddddddbot)...")
+        tasks.append(asyncio.create_task(run_bot_instance(PRIMARY_BOT_TOKEN)))
+
+    if SECONDARY_BOT_TOKEN:
+        logger.info("🇮🇳 Launching TradeMaster Indian Stock Bot (@Raidennnnnxbot)...")
+        tasks.append(asyncio.create_task(run_trademaster_bot(SECONDARY_BOT_TOKEN)))
+
+    if not tasks:
+        logger.error("No valid Telegram Bot tokens found in .env!")
+        return
 
     await asyncio.gather(*tasks)
 

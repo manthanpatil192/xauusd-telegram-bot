@@ -1,0 +1,103 @@
+import matplotlib
+matplotlib.use("Agg")  # Non-interactive backend for generating image buffers/files
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from data_fetcher import DataFetcher
+from smc_analyzer import SMCAnalyzer
+
+class ChartGenerator:
+    """
+    Generates annotated dark-mode candlestick chart images for XAUUSD
+    showing Entry, Stop Loss, Take Profit levels, Order Blocks, and Fair Value Gaps.
+    """
+
+    @staticmethod
+    def generate_signal_chart(df: pd.DataFrame, signal_data: dict, output_path: str = "chart.png") -> str:
+        """
+        Plots dark-mode XAUUSD candles with highlighted SMC levels (Entry, SL, TP1, TP2, OB, FVG).
+        Returns the absolute path to the saved PNG image.
+        """
+        if df.empty:
+            df = DataFetcher.fetch_ohlcv(interval="1h")
+
+        df = df.tail(40).copy() # Focus on recent 40 candles
+
+        # Set up dark mode style
+        plt.style.use("dark_background")
+        fig, ax = plt.subplots(figsize=(12, 7), dpi=150)
+        fig.patch.set_facecolor("#12141D")
+        ax.set_facecolor("#181B26")
+
+        # Plot Candlesticks
+        indexes = np.arange(len(df))
+        opens = df["Open"].values
+        highs = df["High"].values
+        lows = df["Low"].values
+        closes = df["Close"].values
+
+        for i in range(len(df)):
+            color = "#00E676" if closes[i] >= opens[i] else "#FF5252" # Bright green / bright red
+            # High-Low wick
+            ax.plot([indexes[i], indexes[i]], [lows[i], highs[i]], color=color, linewidth=1.2)
+            # Candle body
+            body_bottom = min(opens[i], closes[i])
+            body_top = max(opens[i], closes[i])
+            body_height = max(body_top - body_bottom, 0.10)
+            rect = plt.Rectangle((indexes[i] - 0.35, body_bottom), 0.7, body_height, facecolor=color, edgecolor=color, alpha=0.9)
+            ax.add_patch(rect)
+
+        # Draw Signal Levels
+        entry = signal_data["entry"]
+        sl = signal_data["sl"]
+        tp1 = signal_data["tp1"]
+        tp2 = signal_data["tp2"]
+
+        ax.axhline(y=entry, color="#29B6F6", linestyle="--", linewidth=1.8, label=f"ENTRY: ${entry:.2f}")
+        ax.axhline(y=sl, color="#FF1744", linestyle="-.", linewidth=1.8, label=f"STOP LOSS: ${sl:.2f}")
+        ax.axhline(y=tp1, color="#00E676", linestyle=":", linewidth=1.8, label=f"TAKE PROFIT 1: ${tp1:.2f}")
+        ax.axhline(y=tp2, color="#76FF03", linestyle="-", linewidth=2.0, label=f"TAKE PROFIT 2: ${tp2:.2f}")
+
+        # Highlight Order Blocks & FVGs if available
+        smc_1h = signal_data.get("raw_smc_1h", {})
+        if "order_blocks" in smc_1h:
+            bull_ob = smc_1h["order_blocks"].get("bullish_ob")
+            if bull_ob:
+                ax.axhspan(bull_ob["bottom"], bull_ob["top"], color="#00E676", alpha=0.15, label="Bullish Order Block")
+            
+            bear_ob = smc_1h["order_blocks"].get("bearish_ob")
+            if bear_ob:
+                ax.axhspan(bear_ob["bottom"], bear_ob["top"], color="#FF1744", alpha=0.15, label="Bearish Order Block")
+
+        # Titles and Labels
+        action = signal_data["action"]
+        stars = signal_data["confidence_stars"]
+        ax.set_title(f"XAUUSD (Gold) Smart Money Concepts Setup | {action} {stars}", fontsize=14, fontweight="bold", pad=12, color="#FFFFFF")
+        ax.set_ylabel("Price ($ USD)", fontsize=11, color="#B0BEC5")
+
+        # X-axis candle timestamps
+        time_labels = [t.strftime("%H:%M") if hasattr(t, "strftime") else str(t) for t in df.index]
+        step = max(len(df) // 6, 1)
+        ax.set_xticks(indexes[::step])
+        ax.set_xticklabels(time_labels[::step], color="#B0BEC5", rotation=25)
+
+        ax.grid(True, color="#263238", linestyle=":", alpha=0.6)
+        ax.legend(loc="upper left", facecolor="#1E2330", edgecolor="#37474F", fontsize=10, labelcolor="#FFFFFF")
+
+        plt.tight_layout()
+
+        out_file = Path(output_path).resolve()
+        plt.savefig(out_file, facecolor=fig.get_facecolor(), edgecolor="none")
+        plt.close()
+
+        return str(out_file)
+
+if __name__ == "__main__":
+    from signal_generator import SignalGenerator
+    print("Testing ChartGenerator...")
+    signal = SignalGenerator.generate_signal()
+    df_1h = DataFetcher.fetch_ohlcv(interval="1h")
+    file_path = ChartGenerator.generate_signal_chart(df_1h, signal, "test_chart.png")
+    print(f"Saved chart to: {file_path}")

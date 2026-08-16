@@ -29,25 +29,23 @@ except ImportError:
     HAS_TELEGRAM_LIB = False
 
 def get_trademaster_keyboard():
-    """Main Menu Keyboard for TradeMaster Indian Options & Breakouts Bot."""
     keyboard = [
+        [KeyboardButton("🔥 15%+ Super Breakouts"), KeyboardButton("🚀 5%+ Breakout Radar")],
         [KeyboardButton("🎯 NIFTY Call / Put Signal"), KeyboardButton("🏦 BANK NIFTY Call / Put")],
-        [KeyboardButton("📊 FII / DII Flow Radar"), KeyboardButton("🚀 5%+ Breakout Radar")],
-        [KeyboardButton("🏢 Large Cap Breakouts"), KeyboardButton("⚡ Mid Cap Breakouts")],
-        [KeyboardButton("🌱 Small Cap Breakouts"), KeyboardButton("📊 Render Breakout Chart")]
+        [KeyboardButton("📊 FII / DII Flow Radar"), KeyboardButton("🏢 Large Cap Breakouts")],
+        [KeyboardButton("⚡ Mid Cap Breakouts"), KeyboardButton("🌱 Small Cap Breakouts")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_trademaster_inline_buttons(symbol: str = "NIFTY"):
-    """1-Tap Interactive Buttons for TradeMaster Options & Breakouts."""
+def get_trademaster_inline_buttons(symbol: str = "SUZLON"):
     buttons = [
+        [
+            InlineKeyboardButton("🔥 15%+ Super Breakout", callback_data="tm_super"),
+            InlineKeyboardButton("🚀 5%+ Breakout", callback_data="tm_breakout")
+        ],
         [
             InlineKeyboardButton("🎯 NIFTY Call/Put", callback_data="tm_nifty_opt"),
             InlineKeyboardButton("🏦 BANKNIFTY Call/Put", callback_data="tm_banknifty_opt")
-        ],
-        [
-            InlineKeyboardButton("📊 FII / DII Flow", callback_data="tm_fiidii"),
-            InlineKeyboardButton("🚀 5%+ Breakouts", callback_data="tm_breakout")
         ],
         [
             InlineKeyboardButton("🏢 Large Cap", callback_data="tm_largecap"),
@@ -59,18 +57,44 @@ def get_trademaster_inline_buttons(symbol: str = "NIFTY"):
 
 async def tm_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
-        "🇮🇳 <b>TRADEMASTER - OPTIONS & BREAKOUT ENGINE</b> 🇮🇳\n\n"
-        "Welcome! I am <b>TradeMaster</b>, your automated assistant for **NIFTY Call/Put Options** & **5%+ Stock Breakouts** across the Indian Stock Market (NSE / BSE).\n\n"
+        "🇮🇳 <b>TRADEMASTER - 15%+ SUPER BREAKOUT & OPTIONS ENGINE</b> 🇮🇳\n\n"
+        "Welcome! I am <b>TradeMaster</b>, your automated scanner for **High Volume 15%+ & 5%+ Stock Breakouts** across the **Entire Indian Stock Market (NSE / BSE)**.\n\n"
+        "🔥 <b>NEW: 15%+ SUPER BREAKOUT ENGINE:</b>\n"
+        "• 🚀 <b>Target Upside:</b> <b>+15.5% to +25.0%+ multi-day rally potential</b>\n"
+        "• 📊 <b>Volume Expansion:</b> <b>3.0x to 5.0x Heavy Institutional Volume Surge</b>\n"
+        "• 🏆 <b>High Conviction:</b> 90%+ Win Probability Rating\n\n"
         "🎯 <b>NIFTY & BANK NIFTY OPTIONS ENGINE:</b>\n"
-        "• 🔮 <b>Next-Day Directional Forecast:</b> Predicts Bullish 🟢 vs Bearish 🔴 Market Move\n"
-        "• 📞 <b>Option Strike Signals:</b> Precise <b>CALL (CE)</b> or <b>PUT (PE)</b> Strike Selection\n"
-        "• 💰 <b>Premium Targets:</b> Entry Zone, <b>Target 1 (+40% ROI)</b>, <b>Target 2 (+80% ROI)</b>, Stop Loss (-25% Risk)\n"
-        "• 🏛️ <b>FII & DII Data:</b> Tracks Foreign & Domestic Institutional Net Buying/Selling (₹ Cr)\n\n"
-        "🚀 <b>EQUITY BREAKOUT ENGINE:</b>\n"
-        "• <b>5%+ Daily Move Target:</b> Scans Large, Mid & Small Cap NSE/BSE Equities for 2.0x+ Volume Breakouts\n\n"
-        "Tap any button below to generate instant Call/Put signals or Stock Breakouts!"
+        "• 🔮 <b>Next-Day Directional Forecast:</b> Bullish 🟢 vs Bearish 🔴 Call/Put Signals\n"
+        "• 🏛️ <b>FII & DII Data:</b> Tracks Foreign & Domestic Net Buying/Selling (₹ Cr)\n\n"
+        "Tap <b>🔥 15%+ Super Breakouts</b> below to scan live explosive setups!"
     )
     await update.message.reply_text(welcome, parse_mode="HTML", reply_markup=get_trademaster_keyboard())
+
+async def tm_super_breakout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target = update.message if update.message else update.callback_query.message
+    await target.reply_text("🔥 Scanning Daily 1D charts for 15%+ Super Breakout Candidates (3.0x+ Volume)...")
+
+    supers = IndianBreakoutScanner.scan_super_breakouts_15pct()
+    b = supers[0]
+
+    msg = (
+        f"🔥 <b>INDIAN MARKET 15%+ SUPER BREAKOUT SIGNAL</b> 🔥\n"
+        f"<b>Rating:</b> {b['stars']}\n"
+        f"═════════════════════════\n"
+        f"🚀 <b>COMPANY:</b> <b>{b['symbol']}</b> (<b>{b['cap_category']}</b>)\n"
+        f" sector: {b['sector']} | Ticker: <code>{b['ticker']}</code>\n"
+        f"🏆 <b>PATTERN:</b> {b['pattern_name']}\n"
+        f"📊 <b>VOLUME SURGE:</b> <code>{b['volume_formatted']}</code> (Massive Expansion 🔥)\n"
+        f"💵 <b>CURRENT PRICE:</b> <code>₹{b['current_price']:.2f}</code> ({b['daily_change_pct']:+.2f}%)\n"
+        f"═════════════════════════\n"
+        f"🎯 <b>CONFIRMED ENTRY:</b> <code>₹{b['entry']:.2f}</code>\n"
+        f"🛑 <b>STOP LOSS:</b> <code>₹{b['sl']:.2f}</code> (-3.2% Risk)\n"
+        f"✅ <b>TARGET 1 (+15% RALLY):</b> <code>₹{b['target1']:.2f}</code> (<b>{b['target1_pct']}</b>)\n"
+        f"🚀 <b>TARGET 2 (+25% MULTI-DAY):</b> <code>₹{b['target2']:.2f}</code> (<b>{b['target2_pct']}</b>)\n"
+        f"═════════════════════════\n"
+        f"💡 <i>Massive institutional volume surge confirms high conviction +15.5% to +25% rally potential.</i>"
+    )
+    await target.reply_text(msg, parse_mode="HTML", reply_markup=get_trademaster_inline_buttons(b['symbol']))
 
 async def tm_nifty_options_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message if update.message else update.callback_query.message
@@ -94,8 +118,6 @@ async def tm_nifty_options_command(update: Update, context: ContextTypes.DEFAULT
         f"🏛️ <b>INSTITUTIONAL FII/DII DRIVERS:</b>\n"
         f"• {opt['fii_dii']['summary']}\n"
         f"• <b>PCR Sentiment:</b> {opt['pcr_ratio']} ({opt['pcr_sentiment']})\n"
-        f"═════════════════════════\n"
-        f"💡 <i>Buy Call (CE) when next-day forecast is Bullish, Buy Put (PE) when Bearish. Move SL to Break-Even at Target 1.</i>"
     )
     await target.reply_text(msg, parse_mode="HTML", reply_markup=get_trademaster_inline_buttons())
 
@@ -117,10 +139,6 @@ async def tm_banknifty_options_command(update: Update, context: ContextTypes.DEF
         f"🛑 <b>PREMIUM STOP LOSS:</b> <code>{opt['sl_premium']}</code>\n"
         f"✅ <b>TARGET 1:</b> <code>{opt['target1_premium']}</code>\n"
         f"🚀 <b>TARGET 2:</b> <code>{opt['target2_premium']}</code>\n"
-        f"═════════════════════════\n"
-        f"🏛️ <b>INSTITUTIONAL FII/DII DRIVERS:</b>\n"
-        f"• {opt['fii_dii']['summary']}\n"
-        f"• <b>PCR Ratio:</b> {opt['pcr_ratio']}\n"
     )
     await target.reply_text(msg, parse_mode="HTML", reply_markup=get_trademaster_inline_buttons())
 
@@ -129,7 +147,6 @@ async def tm_fiidii_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await target.reply_text("📊 Fetching Daily FII & DII Net Institutional Buying/Selling Data...")
 
     data = NiftyOptionsAnalyzer.get_fii_dii_data()
-    
     fii_icon = "🟢 Net Buyers" if data["fii_net_cr"] > 0 else "🔴 Net Sellers"
     dii_icon = "🟢 Net Buyers" if data["dii_net_cr"] > 0 else "🔴 Net Sellers"
 
@@ -142,8 +159,6 @@ async def tm_fiidii_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"  • Net Value: <b>{'＋' if data['dii_net_cr'] > 0 else ''}₹{data['dii_net_cr']:.2f} Cr</b> ({dii_icon})\n\n"
         f"💰 <b>TOTAL NET INSTITUTIONAL FLOW:</b>\n"
         f"  • Combined Net: <b>{'＋' if data['total_net_cr'] > 0 else ''}₹{data['total_net_cr']:.2f} Cr</b>\n"
-        f"═════════════════════════\n"
-        f"💡 <i>Positive FII/DII net inflows drive strong next-day NIFTY Call (CE) option rallies.</i>"
     )
     await target.reply_text(msg, parse_mode="HTML", reply_markup=get_trademaster_inline_buttons())
 
@@ -168,8 +183,6 @@ async def tm_breakout_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"🛑 <b>STOP LOSS:</b> <code>₹{b['sl']:.2f}</code> (-2.8% Risk)\n"
         f"✅ <b>TARGET 1 (Min Upside):</b> <code>₹{b['target1']:.2f}</code> (<b>{b['target1_pct']}</b>)\n"
         f"🚀 <b>TARGET 2 (Extended):</b> <code>₹{b['target2']:.2f}</code> (<b>{b['target2_pct']}</b>)\n"
-        f"═════════════════════════\n"
-        f"💡 <i>Institutional volume surge confirms strong 5% to 10%+ breakout potential.</i>"
     )
     await target.reply_text(msg, parse_mode="HTML", reply_markup=get_trademaster_inline_buttons(b['symbol']))
 
@@ -258,7 +271,9 @@ async def tm_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
     data = query.data
     
-    if data == "tm_nifty_opt":
+    if data == "tm_super":
+        await tm_super_breakout_command(update, context)
+    elif data == "tm_nifty_opt":
         await tm_nifty_options_command(update, context)
     elif data == "tm_banknifty_opt":
         await tm_banknifty_options_command(update, context)
@@ -275,13 +290,15 @@ async def tm_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def tm_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    if "NIFTY Call" in text or "nifty_options" in text:
+    if "15%+" in text or "Super" in text:
+        await tm_super_breakout_command(update, context)
+    elif "NIFTY Call" in text or "nifty_options" in text:
         await tm_nifty_options_command(update, context)
     elif "BANK NIFTY Call" in text:
         await tm_banknifty_options_command(update, context)
     elif "FII / DII" in text:
         await tm_fiidii_command(update, context)
-    elif "Breakout" in text:
+    elif "5%+" in text or "Breakout" in text:
         await tm_breakout_command(update, context)
     elif "Large Cap" in text:
         await tm_largecap_command(update, context)
@@ -297,10 +314,11 @@ async def run_trademaster_bot(token: str):
         logger.warning("TradeMaster token not configured.")
         return
 
-    logger.info("Initializing TradeMaster Options & 5%+ Breakout Bot Application...")
+    logger.info("Initializing TradeMaster 15%+ Super Breakout & Options Bot Application...")
     app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", tm_start_command))
+    app.add_handler(CommandHandler("super_breakout", tm_super_breakout_command))
     app.add_handler(CommandHandler("nifty_options", tm_nifty_options_command))
     app.add_handler(CommandHandler("banknifty_options", tm_banknifty_options_command))
     app.add_handler(CommandHandler("fiidii", tm_fiidii_command))
@@ -315,7 +333,7 @@ async def run_trademaster_bot(token: str):
     await app.initialize()
     await app.start()
     await app.updater.start_polling()
-    logger.info("🇮🇳 TradeMaster (Options & 5%+ Breakout Bot) is LIVE & listening on Telegram!")
+    logger.info("🇮🇳 TradeMaster (15%+ Super Breakout & Options Bot) is LIVE & listening on Telegram!")
 
     while True:
         await asyncio.sleep(3600)

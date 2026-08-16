@@ -6,12 +6,11 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from data_fetcher import DataFetcher
-from smc_analyzer import SMCAnalyzer
 
 class ChartGenerator:
     """
-    Generates annotated dark-mode candlestick chart images for XAUUSD
-    showing Entry, SL, TP levels, Order Blocks, FVGs, Fibonacci 61.8% Level, and Average Price Range (APR).
+    Generates annotated dark-mode candlestick chart images for XAUUSD & Indian Stock Breakouts
+    showing Entry, Stop Loss, Target lines, Resistance Breakout lines, and Volume Expansion subplots.
     """
 
     @staticmethod
@@ -22,70 +21,68 @@ class ChartGenerator:
         df = df.tail(40).copy()
 
         plt.style.use("dark_background")
-        fig, ax = plt.subplots(figsize=(12, 7), dpi=150)
+        
+        # Create figure with 2 subplots: Price Chart (75% height) + Volume Subplot (25% height)
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), dpi=150, gridspec_kw={'height_ratios': [3, 1]}, sharex=True)
         fig.patch.set_facecolor("#12141D")
-        ax.set_facecolor("#181B26")
+        ax1.set_facecolor("#181B26")
+        ax2.set_facecolor("#181B26")
 
         indexes = np.arange(len(df))
         opens = df["Open"].values
         highs = df["High"].values
         lows = df["Low"].values
         closes = df["Close"].values
+        volumes = df["Volume"].values if "Volume" in df else np.zeros(len(df))
 
         for i in range(len(df)):
             color = "#00E676" if closes[i] >= opens[i] else "#FF5252"
-            ax.plot([indexes[i], indexes[i]], [lows[i], highs[i]], color=color, linewidth=1.2)
+            ax1.plot([indexes[i], indexes[i]], [lows[i], highs[i]], color=color, linewidth=1.2)
             body_bottom = min(opens[i], closes[i])
             body_top = max(opens[i], closes[i])
             body_height = max(body_top - body_bottom, 0.10)
             rect = plt.Rectangle((indexes[i] - 0.35, body_bottom), 0.7, body_height, facecolor=color, edgecolor=color, alpha=0.9)
-            ax.add_patch(rect)
+            ax1.add_patch(rect)
 
-        entry = signal_data["entry"]
-        sl = signal_data["sl"]
-        tp1 = signal_data["tp1"]
-        tp2 = signal_data["tp2"]
+            # Volume bars in subplot 2
+            vol_color = "#00E676" if closes[i] >= opens[i] else "#FF5252"
+            ax2.bar(indexes[i], volumes[i], color=vol_color, alpha=0.75, width=0.7)
 
-        ax.axhline(y=entry, color="#29B6F6", linestyle="--", linewidth=1.8, label=f"ENTRY: ${entry:.2f}")
-        ax.axhline(y=sl, color="#FF1744", linestyle="-.", linewidth=1.8, label=f"STOP LOSS: ${sl:.2f}")
-        ax.axhline(y=tp1, color="#00E676", linestyle=":", linewidth=1.8, label=f"TAKE PROFIT 1: ${tp1:.2f}")
-        ax.axhline(y=tp2, color="#76FF03", linestyle="-", linewidth=2.0, label=f"TAKE PROFIT 2: ${tp2:.2f}")
+        # Highlight breakout candle volume spike on last bar
+        if len(volumes) > 0:
+            ax2.bar(indexes[-1], volumes[-1], color="#76FF03", alpha=1.0, width=0.8, edgecolor="#FFFFFF", label="Breakout Volume Spike")
 
-        # Plot Trend-Based Fibonacci 61.8% Golden Ratio Line
-        fib618 = signal_data.get("fib_618")
-        if fib618:
-            ax.axhline(y=fib618, color="#FFD700", linestyle="-", linewidth=1.5, alpha=0.85, label=f"Fib 61.8% Golden Ratio: ${fib618:.2f}")
+        entry = signal_data.get("entry", closes[-1])
+        sl = signal_data.get("sl", entry * 0.97)
+        tp1 = signal_data.get("tp1") or signal_data.get("target1", entry * 1.05)
+        tp2 = signal_data.get("tp2") or signal_data.get("target2", entry * 1.10)
 
-        # Plot Average Price Range (APR) Bounds
-        apr_upper = signal_data.get("apr_upper")
-        apr_lower = signal_data.get("apr_lower")
-        if apr_upper and apr_lower:
-            ax.axhline(y=apr_upper, color="#AB47BC", linestyle=":", linewidth=1.2, alpha=0.7, label=f"APR Upper Range: ${apr_upper:.2f}")
-            ax.axhline(y=apr_lower, color="#AB47BC", linestyle=":", linewidth=1.2, alpha=0.7, label=f"APR Lower Range: ${apr_lower:.2f}")
+        ax1.axhline(y=entry, color="#29B6F6", linestyle="--", linewidth=1.8, label=f"ENTRY: ${entry:.2f}" if "XAUUSD" in signal_data.get("symbol", "") else f"ENTRY: ₹{entry:.2f}")
+        ax1.axhline(y=sl, color="#FF1744", linestyle="-.", linewidth=1.8, label=f"STOP LOSS: ${sl:.2f}" if "XAUUSD" in signal_data.get("symbol", "") else f"STOP LOSS: ₹{sl:.2f}")
+        ax1.axhline(y=tp1, color="#00E676", linestyle=":", linewidth=1.8, label=f"TARGET 1 (+5%+): ${tp1:.2f}" if "XAUUSD" in signal_data.get("symbol", "") else f"TARGET 1 (+5%+): ₹{tp1:.2f}")
+        ax1.axhline(y=tp2, color="#76FF03", linestyle="-", linewidth=2.0, label=f"TARGET 2 (+10%+): ${tp2:.2f}" if "XAUUSD" in signal_data.get("symbol", "") else f"TARGET 2 (+10%+): ₹{tp2:.2f}")
 
-        # Highlight Order Blocks
-        smc_1h = signal_data.get("raw_smc_1h", {})
-        if "order_blocks" in smc_1h:
-            bull_ob = smc_1h["order_blocks"].get("bullish_ob")
-            if bull_ob:
-                ax.axhspan(bull_ob["bottom"], bull_ob["top"], color="#00E676", alpha=0.15, label="Bullish Order Block")
-            
-            bear_ob = smc_1h["order_blocks"].get("bearish_ob")
-            if bear_ob:
-                ax.axhspan(bear_ob["bottom"], bear_ob["top"], color="#FF1744", alpha=0.15, label="Bearish Order Block")
+        # Draw Resistance Line if available
+        res_level = signal_data.get("resistance_level")
+        if res_level:
+            ax1.axhline(y=res_level, color="#FFD700", linestyle="-", linewidth=1.5, alpha=0.85, label=f"Breakout Resistance: ₹{res_level:.2f}")
 
-        action = signal_data["action"]
-        stars = signal_data["confidence_stars"]
-        ax.set_title(f"XAUUSD (Gold) SMC & Fib 61.8% Setup | {action} {stars}", fontsize=14, fontweight="bold", pad=12, color="#FFFFFF")
-        ax.set_ylabel("Price ($ USD)", fontsize=11, color="#B0BEC5")
+        # Titles and Labels
+        symbol = signal_data.get("symbol", "Asset")
+        pattern = signal_data.get("pattern_name", "High-Volume Breakout")
+        stars = signal_data.get("stars", "⭐️⭐️⭐️⭐️⭐️")
+        ax1.set_title(f"{symbol} 1D Daily Breakout Chart | {pattern} {stars}", fontsize=13, fontweight="bold", pad=10, color="#FFFFFF")
+        ax1.set_ylabel("Price Level", fontsize=10, color="#B0BEC5")
+        ax2.set_ylabel("Volume", fontsize=9, color="#B0BEC5")
 
-        time_labels = [t.strftime("%H:%M") if hasattr(t, "strftime") else str(t) for t in df.index]
+        time_labels = [t.strftime("%d %b") if hasattr(t, "strftime") else str(t) for t in df.index]
         step = max(len(df) // 6, 1)
-        ax.set_xticks(indexes[::step])
-        ax.set_xticklabels(time_labels[::step], color="#B0BEC5", rotation=25)
+        ax2.set_xticks(indexes[::step])
+        ax2.set_xticklabels(time_labels[::step], color="#B0BEC5", rotation=20)
 
-        ax.grid(True, color="#263238", linestyle=":", alpha=0.6)
-        ax.legend(loc="upper left", facecolor="#1E2330", edgecolor="#37474F", fontsize=9, labelcolor="#FFFFFF")
+        ax1.grid(True, color="#263238", linestyle=":", alpha=0.6)
+        ax2.grid(True, color="#263238", linestyle=":", alpha=0.4)
+        ax1.legend(loc="upper left", facecolor="#1E2330", edgecolor="#37474F", fontsize=8.5, labelcolor="#FFFFFF")
 
         plt.tight_layout()
 
@@ -96,9 +93,9 @@ class ChartGenerator:
         return str(out_file)
 
 if __name__ == "__main__":
-    from signal_generator import SignalGenerator
-    print("Testing ChartGenerator with Fib 61.8% & APR visual annotations...")
-    signal = SignalGenerator.generate_signal()
-    df_1h = DataFetcher.fetch_ohlcv(interval="1h")
-    file_path = ChartGenerator.generate_signal_chart(df_1h, signal, "test_fib_chart.png")
-    print(f"Saved chart to: {file_path}")
+    from indian_breakout_scanner import IndianBreakoutScanner
+    print("Testing ChartGenerator for Indian Stock Breakout Chart...")
+    breakouts = IndianBreakoutScanner.scan_all_breakouts()
+    b = breakouts[0]
+    path = ChartGenerator.generate_signal_chart(b["df"], b, "test_breakout_chart.png")
+    print(f"Saved breakout chart PNG to: {path}")

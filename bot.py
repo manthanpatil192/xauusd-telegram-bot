@@ -4,14 +4,13 @@ import logging
 import asyncio
 from pathlib import Path
 
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, ECO_MODE_DEFAULT, CPU_ENERGY_SAVED_PER_SCAN_GRAMS_CO2
+from config import PRIMARY_BOT_TOKEN, TELEGRAM_CHANNEL_ID, ECO_MODE_DEFAULT, CPU_ENERGY_SAVED_PER_SCAN_GRAMS_CO2
 from data_fetcher import DataFetcher
 from smc_analyzer import SMCAnalyzer
 from news_fetcher import NewsFetcher
 from signal_generator import SignalGenerator
 from chart_generator import ChartGenerator
 
-# Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -57,7 +56,6 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_inline_signal_buttons():
-    """Returns 1-tap interactive inline buttons attached under signal messages."""
     buttons = [
         [
             InlineKeyboardButton("🎯 Refresh Signal", callback_data="btn_signal"),
@@ -221,7 +219,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle 1-tap interactive inline button clicks."""
     query = update.callback_query
     await query.answer()
     
@@ -252,17 +249,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif "Help" in text or "Strategy" in text:
         await help_command(update, context)
 
-def main():
-    token = TELEGRAM_BOT_TOKEN.strip()
-    if not token or token == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
-        logger.warning("TELEGRAM_BOT_TOKEN is not configured!")
-        return
-
+async def run_bot_instance(token: str):
+    """Runs an independent Telegram bot instance using the specified bot token."""
     if not HAS_TELEGRAM_LIB:
         logger.error("python-telegram-bot library is missing!")
         return
 
-    logger.info("Initializing High-Precision Telegram Bot application with Inline Buttons...")
+    logger.info(f"Initializing Bot Instance (Token ending: ...{token[-8:]})...")
     app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", start_command))
@@ -276,8 +269,19 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    logger.info("Bot started successfully! Listening for messages on Telegram...")
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    logger.info(f"✅ Bot Instance (...{token[-8:]}) is now LIVE & listening!")
+
+    # Keep running
+    while True:
+        await asyncio.sleep(3600)
+
+def main():
+    token = PRIMARY_BOT_TOKEN.strip()
+    if token:
+        asyncio.run(run_bot_instance(token))
 
 if __name__ == "__main__":
     main()
